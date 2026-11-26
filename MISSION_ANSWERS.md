@@ -173,3 +173,11 @@ Result: 12/12 tiêu chí đạt · 41/41 checks passed
 ```
 
 Các kết quả chính: image 63 MB theo `docker image inspect`; key thiếu/sai → 401; rate limit 5 request/phút → request kế tiếp 429 và vẫn 429 sau restart; Redis mất kết nối → `/ready` 503 trong khi `/health` 200; budget rất nhỏ → 402; SIGTERM trong lúc đang có request → response 200, process exit 0; `docker stop` → exit 0 trong 0,8 giây. Dockerfile dùng `mirror.gcr.io/library/python:3.11-slim` vì Docker Hub trả HTTP 429 khi build trên máy này.
+
+## Part 7: Benchmark local (CP7)
+
+Đã chạy agent v1 trên cổng 8001, v2 trên cổng 8002. `load_test.py` gửi 300 request cho từng mức concurrency 1, 10, 50, 100 và từng mức `MOCK_SLOW_RATE` 0, 0.03, 0.1 (concurrency 20). JSON kết quả nằm tại `06-lab-complete/benchmark-observability/develop/reports/`; các bảng số liệu và nhận xét ở `BENCHMARK_REPORT.md`. Concurrency 50 và 100 trượt SLO p95 500 ms; mức slow rate 0.1 cũng trượt SLO p95.
+
+Eval trên 23 câu: v1 đúng 1/23, v2 ban đầu đúng 21/23, v2 sau khi thêm hai entry cho JWT và Kubernetes HPA đúng 23/23. Lệnh cuối với `--min-accuracy 1.0 --baseline reports/eval_v2.json` trả **exit code 0, Quality gate PASS**, không regression. Chạy v1 với baseline v2 trả **exit code 1, Quality gate FAIL**, có 20 regression.
+
+**Cách chặn merge trong CI:** khởi động agent candidate, chạy `python eval/run_eval.py --url http://localhost:8000 --baseline reports/eval_v2_fixed.json --min-accuracy 1.0 --out reports/eval_candidate.json` như một step bắt buộc trong GitHub Actions. Không dùng `continue-on-error`; khi script trả exit code 1 do accuracy thấp hoặc regression, job fail và branch protection không cho merge. Số liệu eval không dùng để kết luận p95 vì chỉ có 23 request.
