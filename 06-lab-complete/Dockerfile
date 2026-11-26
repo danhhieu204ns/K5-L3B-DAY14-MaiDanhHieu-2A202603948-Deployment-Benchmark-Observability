@@ -9,10 +9,20 @@
 #
 # Bản dưới đây build và chạy được nhưng CHƯA đạt yêu cầu nào ở trên.
 # ============================================================
-FROM python:3.11
-
+FROM mirror.gcr.io/library/python:3.11-slim AS builder
 WORKDIR /app
-COPY . .
-RUN pip install -r requirements.txt
+COPY requirements.txt .
+RUN python -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
-CMD uvicorn app.main:app --host 0.0.0.0 --port 8000
+FROM mirror.gcr.io/library/python:3.11-slim AS runtime
+RUN groupadd -r agent && useradd -r -g agent agent
+WORKDIR /app
+COPY --from=builder /opt/venv /opt/venv
+COPY --chown=agent:agent app/ ./app/
+COPY --chown=agent:agent utils/ ./utils/
+ENV PATH="/opt/venv/bin:$PATH" PYTHONDONTWRITEBYTECODE=1
+USER agent
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2"]

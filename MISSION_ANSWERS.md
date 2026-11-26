@@ -133,3 +133,27 @@ Chạy `docker compose -p k5-day14-scaling up -d --build --scale agent=3` trong 
 ### Exercise 5.5: Test stateless
 
 Chạy `python test_stateless.py` với `PYTHONIOENCODING=utf-8` trên PowerShell. Script gửi **5 câu hỏi** trong cùng session; endpoint history trả **10 message** (5 user + 5 assistant) dù các request đi qua ba instance. Sau khi dừng một instance, gửi thêm một câu hỏi bằng cùng `session_id`; history tăng lên **12 message**, response báo `storage: redis`. Điều này chứng minh session được chia sẻ giữa các instance trong phép thử này. Script `test_stateless.py` chỉ gửi 5 câu và đọc history; bước dừng instance được thực hiện riêng. Đã dọn stack bằng `docker compose -p k5-day14-scaling down`.
+
+## Part 6: Final Project (CP5)
+
+Đã hoàn thiện agent trong `06-lab-complete/`: cấu hình qua environment, API key, liveness/readiness, rate limit và cost guard lưu Redis, JSON log, shutdown êm, Docker multi-stage, Compose và `railway.toml`. Chạy `check_production_ready.py` đầy đủ trong container Linux có Docker socket (máy Windows chỉ có distro WSL `docker-desktop`) và nhận kết quả:
+
+```text
+📋 Checklist Deliverable
+   ✅ Dockerfile (multi-stage, < 500 MB)
+   ✅ docker-compose.yml (agent + redis)
+   ✅ .dockerignore
+   ✅ Health check endpoint (GET /health)
+   ✅ Readiness endpoint (GET /ready)
+   ✅ API Key authentication
+   ✅ Rate limiting
+   ✅ Cost guard
+   ✅ Config từ environment variables
+   ✅ Structured logging
+   ✅ Graceful shutdown
+   ✅ Public URL ready (Railway / Render config)
+Result: 12/12 tiêu chí đạt · 41/41 checks passed
+🎉 PASS 12/12 — PRODUCTION READY!
+```
+
+Các kết quả chính: image 63 MB theo `docker image inspect`; key thiếu/sai → 401; rate limit 5 request/phút → request kế tiếp 429 và vẫn 429 sau restart; Redis mất kết nối → `/ready` 503 trong khi `/health` 200; budget rất nhỏ → 402; SIGTERM trong lúc đang có request → response 200, process exit 0; `docker stop` → exit 0 trong 0,8 giây. Dockerfile dùng `mirror.gcr.io/library/python:3.11-slim` vì Docker Hub trả HTTP 429 khi build trên máy này.
