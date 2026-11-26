@@ -68,6 +68,22 @@ Client → Nginx (:80) → Agent (:8000)
 
 Đã chạy `docker compose -p k5-day14-docker -f 02-docker/production/docker-compose.yml up -d --build`. Qua Nginx, `GET http://localhost/health` trả `HTTP/1.1 200 OK` với `status: ok`; `POST http://localhost/ask` với JSON `{"question":"Explain microservices"}` trả status `200` và trường `answer`. Tạo file `.env.local` rỗng (được `.gitignore` bỏ qua) vì Compose yêu cầu file này.
 
+## Part 3: Cloud Deployment (CP6)
+
+### Exercise 3.2: Render deployment
+
+Public URL: https://k5-l3b-day14-maidanhhieu-2a202603948.onrender.com
+
+Render Web Service dùng Docker, branch `main`, root directory `06-lab-complete/`. Dashboard báo **Deploy succeeded · Live** cho commit `51017d1` ngày 26/11/2026. Kiểm tra URL public: `GET /health` → **200**, `GET /ready` → **200**, `POST /ask` thiếu `X-API-Key` → **401**, `POST /ask` có key hợp lệ → **200** với JSON có `question`, `answer`, `cost_usd`. `GET /` → 404 vì không có route gốc. Không ghi key vào repo. Thông tin và lệnh kiểm tra: `DEPLOYMENT.md`.
+
+### So sánh Render với Railway
+
+`railway.toml` chọn Dockerfile builder và `healthcheckPath = "/health"`; Railway cấu hình root directory và biến môi trường của service riêng trên dashboard. `06-lab-complete/render.yaml` mô tả web service Docker, `rootDir`, `healthCheckPath: /health` và danh sách env vars; secret dùng `sync: false` để nhập trên dashboard. Điểm khác là Railway dùng TOML cho build/deploy của service, còn Render Blueprint dùng YAML để khai báo service và biến môi trường. Web service hiện tại được tạo thủ công trên Render; file `render.yaml` trong thư mục con là template tham khảo, chưa được Render tự áp dụng. Nếu dùng Blueprint, cần đưa bản sao file ra gốc repo.
+
+### Exercise 3.3: Cloud Run CI/CD
+
+`cloudbuild.yaml` mô tả pipeline: cài dependency và chạy pytest → build Docker image gắn commit SHA → push các tag lên registry → deploy image lên Cloud Run ở `asia-southeast1`. `service.yaml` định nghĩa service với giới hạn CPU/RAM, concurrency, min/max instances, secret từ Secret Manager và các probe `/health`, `/ready`. Đây là phân tích cấu hình mẫu; không có deployment Cloud Run trong bài này.
+
 ## Part 4: API Security (CP3)
 
 ### Exercise 4.1: API key authentication
