@@ -67,3 +67,47 @@ Client → Nginx (:80) → Agent (:8000)
 ```
 
 Đã chạy `docker compose -p k5-day14-docker -f 02-docker/production/docker-compose.yml up -d --build`. Qua Nginx, `GET http://localhost/health` trả `HTTP/1.1 200 OK` với `status: ok`; `POST http://localhost/ask` với JSON `{"question":"Explain microservices"}` trả status `200` và trường `answer`. Tạo file `.env.local` rỗng (được `.gitignore` bỏ qua) vì Compose yêu cầu file này.
+
+## Part 4: API Security (CP3)
+
+### Exercise 4.1: API key authentication
+
+`develop/app.py` lấy key từ `AGENT_API_KEY` và kiểm tra header `X-API-Key` trong dependency `verify_api_key` của `POST /ask`. Thiếu key trả **401**, key sai trả **403**, key đúng trả **200**. Muốn rotate key, đổi biến môi trường `AGENT_API_KEY` trên service rồi khởi động lại app; client phải dùng key mới. Bản demo in key lúc khởi động, vì vậy không nên dùng cách log đó với secret thật.
+
+Kết quả chạy trên cổng 8003: không có key → 401; key sai → 403; key hợp lệ → 200 và JSON có `question`, `answer`. Lần gửi JSON bằng `curl.exe` trong PowerShell trả 500 vì body bị sai định dạng; traceback là `JSONDecodeError`. Gửi cùng body bằng `Invoke-WebRequest` trả 200.
+
+### Exercise 4.2: JWT authentication
+
+`POST /auth/token` với tài khoản demo `student`/`demo123` trả JWT bearer, hạn 60 phút. Client gửi token trong header `Authorization: Bearer <token>`; `verify_token` kiểm tra chữ ký, thời hạn rồi lấy `sub` và `role`. Thiếu token → **401**. Token không được ghi vào báo cáo.
+
+### Exercise 4.3: Rate limiting
+
+`rate_limiter.py` dùng **sliding window**: lưu timestamp request theo từng username trong deque, bỏ timestamp cũ hơn 60 giây. User thường có giới hạn **10 request/60 giây**, admin **100 request/60 giây** (tier riêng, không phải vô hạn). Với token `student`, 10 request đầu trả **200**; request thứ 11 và 12 trả **429**, có header `Retry-After`. Dữ liệu giới hạn hiện nằm trong RAM nên sẽ mất khi restart hoặc chạy nhiều instance; triển khai thật nên dùng Redis.
+
+Output `curl.exe -i` rút gọn từ lần chạy thực tế (không chứa token):
+
+```text
+POST /ask, không có Authorization
+HTTP/1.1 401 Unauthorized
+www-authenticate: Bearer
+{"detail":"Authentication required. Include: Authorization: Bearer <token>"}
+
+POST /ask, token hợp lệ của teacher
+HTTP/1.1 200 OK
+{"question":"Hello","answer":"...","usage":{"requests_remaining":99,...}}
+
+POST /ask, sau 10 request của student trong 60 giây
+HTTP/1.1 429 Too Many Requests
+x-ratelimit-limit: 10
+x-ratelimit-remaining: 0
+retry-after: 43
+{"detail":{"error":"Rate limit exceeded","limit":10,"window_seconds":60,"retry_after_seconds":43}}
+```
+
+### Exercise 4.4: Cost guard
+
+`cost_guard.py` kiểm tra budget trước khi gọi LLM và ghi số input/output tokens sau request. Bản demo giới hạn **1 USD/ngày mỗi user**, **10 USD/ngày toàn hệ thống**, cảnh báo khi đạt 80%; user hết budget trả **402**, tổng budget hết trả **503**. Số liệu hiện lưu trong RAM, nên không bền khi restart và không chia sẻ giữa nhiều instance.
+
+Nếu triển khai yêu cầu **10 USD/tháng mỗi user** của Exercise 4.4, lưu chi phí trong Redis với key dạng `budget:<user_id>:<YYYY-MM>`, kiểm tra `current + estimated_cost <= 10` trước request, cập nhật chi phí sau request và đặt TTL đến đầu tháng sau. Phần kiểm tra/cập nhật cần thao tác nguyên tử để các request đồng thời không vượt ngân sách. Rate limit bảo vệ số request theo thời gian; cost guard bảo vệ tổng chi phí token, nên cần cả hai.
+
+**Ghi nhận từ code mẫu:** trường `budget_remaining_usd` trong response `/ask` đang gán `usage.total_cost_usd` (chi phí đã dùng), khác với tên trường. Endpoint `/me/usage` có phép tính ngân sách còn lại đúng hơn.
