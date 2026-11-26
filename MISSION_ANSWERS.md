@@ -181,3 +181,28 @@ Các kết quả chính: image 63 MB theo `docker image inspect`; key thiếu/sa
 Eval trên 23 câu: v1 đúng 1/23, v2 ban đầu đúng 21/23, v2 sau khi thêm hai entry cho JWT và Kubernetes HPA đúng 23/23. Lệnh cuối với `--min-accuracy 1.0 --baseline reports/eval_v2.json` trả **exit code 0, Quality gate PASS**, không regression. Chạy v1 với baseline v2 trả **exit code 1, Quality gate FAIL**, có 20 regression.
 
 **Cách chặn merge trong CI:** khởi động agent candidate, chạy `python eval/run_eval.py --url http://localhost:8000 --baseline reports/eval_v2_fixed.json --min-accuracy 1.0 --out reports/eval_candidate.json` như một step bắt buộc trong GitHub Actions. Không dùng `continue-on-error`; khi script trả exit code 1 do accuracy thấp hoặc regression, job fail và branch protection không cho merge. Số liệu eval không dùng để kết luận p95 vì chỉ có 23 request.
+
+## CP8 — Observability stack và benchmark scaling
+
+Đã chạy Docker Compose project `k5-day14-observability` với agent, Nginx, Prometheus, Grafana, Jaeger và Locust. Ảnh bằng chứng gồm `screenshots/grafana-dashboard.png`, `screenshots/jaeger-slow-trace.png`, `screenshots/jaeger-error-trace.png`, `screenshots/prometheus-alert-firing.png`. `promtool test rules` trả `SUCCESS`; snapshot Prometheus API ghi nhận đồng thời bốn alert firing.
+
+Locust headless 100 users, ramp 10/s, 2 phút: 1 instance đạt 54.21 RPS, p95 1700 ms; 3 instances đạt 59.29 RPS, p95 370 ms. File CSV ở `06-lab-complete/benchmark-observability/production/benchmark-results/`. Dùng `docker compose run --no-deps` để Compose giữ đúng số instance của phép đo.
+
+Trace chậm `03db16d361d8181eaf3f2a98a9e9c49d` có tổng 2308.5 ms, span LLM 1705.4 ms. Trace lỗi `c2d75201c75e1a2b2683d2816b18c27a` có event `exception` và log `llm_error` cùng `trace_id`. `MOCK_ERROR_RATE=0.2` làm alert error firing sau khoảng 84 giây; `MOCK_SLOW_RATE=0.3` làm alert p95 firing sau khoảng 139 giây; pause một agent làm alert down firing sau khoảng 35–42 giây. Cost alert đã firing từ tải baseline, nên không thể gán thời gian kích hoạt riêng cho thay đổi model. Đổi sang v1 cho eval 1/23 câu đúng và 22 regression, quality gate FAIL; cần eval theo lịch để phát hiện lỗi chất lượng mà metric HTTP không thấy. Chi tiết và dòng log JSON ở [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md).
+
+## AI log
+
+Bài lab có sử dụng ChatGPT/Codex để giải thích yêu cầu, đọc lỗi và hỗ trợ viết code, tài liệu. Các số đo và trạng thái được ghi theo kết quả lệnh, JSON/CSV và ảnh trong repo.
+
+| Nội dung đã hỏi AI | AI hỗ trợ | Cách kiểm tra kết quả |
+|---|---|---|
+| CP1: tóm tắt repo, bắt đầu lab, sửa lệnh `curl` trên Windows và điền Exercise 1.1 | Giải thích cấu trúc, cú pháp PowerShell và sáu anti-pattern | Gọi app local, `/ask` trả 200; so với code develop/production. |
+| CP2: triển khai Docker và kiểm tra Exercise 2.3 | Hỗ trợ lệnh build, Compose và sửa tài liệu bị trùng mục | Đo image develop 1,67 GB, production 240 MB; kiểm tra `/health` và `/ask` qua Nginx. |
+| CP3: tiếp tục bảo mật API | Giải thích API key, JWT, rate limit và cost guard; hỗ trợ ghi đáp án | Kiểm tra thực tế 401, 200, 429 và nội dung response như Part 4. |
+| CP4: tiếp tục scaling và reliability | Hỗ trợ chạy ba instance và phân tích session dùng chung Redis | Chạy `test_stateless.py`, kiểm tra history 10 rồi 12 message sau khi dừng một instance. |
+| CP5: hoàn thiện agent production | Hỗ trợ sửa code/config, đọc lỗi và chạy checker | Lần chạy Linux trước đó báo PASS 12/12, 41/41 checks; output tóm tắt ở Part 6. |
+| CP6: hướng dẫn deploy Render và kiểm tra 401/200 | Hướng dẫn cấu hình Web Service, Redis và lệnh PowerShell | URL Render trả `/health`, `/ready` 200; `/ask` không key 401, có key 200; lưu ảnh deploy và request. |
+| CP7: benchmark tải và eval | Hỗ trợ chạy công cụ, đọc JSON, sửa hai mục knowledge base và viết nhận xét | Đối chiếu `reports/load_v2_*.json`, `reports/eval_*.json`; quality gate v2 sau sửa đạt 23/23. |
+| CP8: Docker Compose observability, Locust, Jaeger, Prometheus | Hỗ trợ sửa Dockerfile của agent quan sát, thêm `--no-deps` để phép đo giữ đúng số replicas, chạy thí nghiệm và điền báo cáo | Đối chiếu `benchmark-results/scale_*.csv`, trace JSON, snapshot alert và bốn ảnh CP8; `promtool test rules` báo SUCCESS. |
+
+Không dùng AI để dựng hay sửa nội dung ảnh bằng chứng hoặc tự đặt số đo; ảnh được chụp từ giao diện thực. Người nộp cần đọc lại phần phân tích và file nộp để có thể giải thích khi Lab Coach hỏi.

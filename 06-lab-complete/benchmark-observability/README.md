@@ -304,7 +304,7 @@ curl -i http://localhost:8080/metrics   # → 404: /metrics không public ra ngo
 **Headless** (cho benchmark có số liệu lưu lại):
 
 ```bash
-docker compose run --rm locust -f /mnt/locust/locustfile.py --host http://nginx \
+docker compose run --no-deps --rm locust -f /mnt/locust/locustfile.py --host http://nginx \
   --headless -u 30 -r 5 -t 2m --csv /mnt/results/v2_2replicas
 # Kết quả: benchmark-results/v2_2replicas_stats.csv
 ```
@@ -400,12 +400,12 @@ Với mỗi thí nghiệm: chụp màn hình dashboard + alert, ghi lại **mấ
 ```bash
 # 1 instance
 docker compose up -d --scale agent=1
-docker compose run --rm locust -f /mnt/locust/locustfile.py --host http://nginx \
+docker compose run --no-deps --rm locust -f /mnt/locust/locustfile.py --host http://nginx \
   --headless -u 100 -r 10 -t 2m --csv /mnt/results/scale_1
 
 # 3 instance
 docker compose up -d --scale agent=3
-docker compose run --rm locust -f /mnt/locust/locustfile.py --host http://nginx \
+docker compose run --no-deps --rm locust -f /mnt/locust/locustfile.py --host http://nginx \
   --headless -u 100 -r 10 -t 2m --csv /mnt/results/scale_3
 ```
 

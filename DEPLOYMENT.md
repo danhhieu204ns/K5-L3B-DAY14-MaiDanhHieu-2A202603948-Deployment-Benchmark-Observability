@@ -19,12 +19,19 @@ Render Web Service, Docker build từ `06-lab-complete/`, branch `main`. Render 
 
 `GET /` trả 404 vì app không khai báo route gốc. `/ready` trả 200 cho thấy app kết nối được Redis tại thời điểm kiểm tra.
 
-## Test authenticated request (PowerShell)
+## Bốn lệnh kiểm tra (PowerShell)
 
 Trước tiên đặt một `AGENT_API_KEY` mới trong Render Dashboard nếu key cũ đã lộ. Chờ service redeploy xong. Nhập key qua prompt ẩn dưới đây; **không đặt key vào chuỗi lời nhắc hoặc dán vào báo cáo**:
 
 ```powershell
 $base = 'https://k5-l3b-day14-maidanhhieu-2a202603948.onrender.com'
+(Invoke-WebRequest -UseBasicParsing -Uri "$base/health").StatusCode # 200
+(Invoke-WebRequest -UseBasicParsing -Uri "$base/ready").StatusCode  # 200
+try {
+    Invoke-WebRequest -UseBasicParsing -Method Post -Uri "$base/ask" -ContentType 'application/json' -Body '{"question":"Hello"}' | Out-Null
+} catch {
+    [int]$_.Exception.Response.StatusCode # 401
+}
 $secureKey = Read-Host 'Nhap AGENT_API_KEY moi' -AsSecureString
 $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureKey)
 try { $key = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) }
@@ -43,7 +50,6 @@ Agent cần `AGENT_API_KEY`, `REDIS_URL`, `ENVIRONMENT`, `RATE_LIMIT_PER_MINUTE`
 
 ## Screenshots
 
-- [Render Key Value đang Available](screenshots/dashboard.png)
+- [Render Key Value `redis` đang Available](screenshots/dashboard.png)
+- [Render Web Service báo Deploy succeeded / Live](screenshots/running.png)
 - [POST /ask có key trả 200](screenshots/test.png)
-
-Cần thêm ảnh **Web Service báo Deploy succeeded / Live** (lưu `screenshots/web-live.png`) để bằng chứng deployment rõ ràng. Ảnh không được lộ API key.

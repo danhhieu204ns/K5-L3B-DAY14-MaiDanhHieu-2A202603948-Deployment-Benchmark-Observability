@@ -119,12 +119,14 @@ Kẹt quá 10 phút ở một mốc: gọi Lab Coach, ghi lại lỗi, rồi đi
 
   ```bash
   docker compose -p k5-day14-observability up -d --build --scale agent=1
-  docker compose -p k5-day14-observability run --rm locust -f /mnt/locust/locustfile.py --host http://nginx \
+  docker compose -p k5-day14-observability run --no-deps --rm locust -f /mnt/locust/locustfile.py --host http://nginx \
     --headless -u 100 -r 10 -t 2m --csv /mnt/results/scale_1
   docker compose -p k5-day14-observability up -d --scale agent=3
-  docker compose -p k5-day14-observability run --rm locust -f /mnt/locust/locustfile.py --host http://nginx \
+  docker compose -p k5-day14-observability run --no-deps --rm locust -f /mnt/locust/locustfile.py --host http://nginx \
     --headless -u 100 -r 10 -t 2m --csv /mnt/results/scale_3
   ```
+
+  `--no-deps` giữ nguyên số agent đã scale; nếu bỏ tùy chọn này, Compose có thể khởi động lại số replicas mặc định khi chạy Locust.
 
   Chụp đủ ảnh và chép log **trước** khi dọn stack (`docker compose -p k5-day14-observability down -v`). Dùng cùng `-p` khi xem log (`docker compose -p k5-day14-observability logs agent`).
 - **Sản phẩm:** `BENCHMARK_REPORT.md` điền đủ; `production/benchmark-results/scale_1_stats.csv` và `scale_3_stats.csv`; 4 ảnh Part 7 trong `screenshots/`. Đóng gói theo [SUBMISSION.md](SUBMISSION.md).

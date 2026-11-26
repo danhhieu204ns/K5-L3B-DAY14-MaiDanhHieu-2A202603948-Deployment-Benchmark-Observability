@@ -6,7 +6,7 @@ vẽ biểu đồ realtime, xuất CSV — là công cụ benchmark chuẩn tron
 
 Chạy qua docker compose (đã cấu hình sẵn):
   Web UI   : http://localhost:8089  → nhập số user, spawn rate → Start
-  Headless : docker compose run --rm locust -f /mnt/locust/locustfile.py \
+  Headless : docker compose run --no-deps --rm locust -f /mnt/locust/locustfile.py \
                --headless -u 30 -r 5 -t 2m --csv /mnt/results/run1
 
 Mỗi user: hỏi agent (phần lớn thời gian), thỉnh thoảng gọi /health,
