@@ -111,3 +111,25 @@ retry-after: 43
 Nếu triển khai yêu cầu **10 USD/tháng mỗi user** của Exercise 4.4, lưu chi phí trong Redis với key dạng `budget:<user_id>:<YYYY-MM>`, kiểm tra `current + estimated_cost <= 10` trước request, cập nhật chi phí sau request và đặt TTL đến đầu tháng sau. Phần kiểm tra/cập nhật cần thao tác nguyên tử để các request đồng thời không vượt ngân sách. Rate limit bảo vệ số request theo thời gian; cost guard bảo vệ tổng chi phí token, nên cần cả hai.
 
 **Ghi nhận từ code mẫu:** trường `budget_remaining_usd` trong response `/ask` đang gán `usage.total_cost_usd` (chi phí đã dùng), khác với tên trường. Endpoint `/me/usage` có phép tính ngân sách còn lại đúng hơn.
+
+## Part 5: Scaling & Reliability (CP4)
+
+### Exercise 5.1: Health checks
+
+Bản `develop/app.py` có `GET /health` để báo process còn hoạt động, uptime và tình trạng bộ nhớ; `GET /ready` dùng cờ `_is_ready` để báo có nhận traffic được không (chưa sẵn sàng → 503). Chạy app trên cổng 8005: `/health` → **200**, `status: ok`; `/ready` → **200**, `ready: true`; `POST /ask?question=hello` → **200**. Máy thử chưa cài `psutil`, nên phần kiểm tra bộ nhớ trong `/health` ghi `psutil not installed`.
+
+### Exercise 5.2: Graceful shutdown
+
+`develop/app.py` dùng middleware đếm `_in_flight_requests`. Trong `lifespan`, khi shutdown, app đặt `_is_ready = False` rồi chờ số request đang xử lý về 0, tối đa 30 giây. Uvicorn được cấu hình `timeout_graceful_shutdown=30`. Mục đích là ngừng nhận traffic mới và hoàn tất request hiện tại trước khi thoát. Test SIGTERM đồng thời với request trên Windows chưa được thực hiện; vì vậy chưa khẳng định từ phép thử rằng request đang chạy luôn hoàn tất. Khi dừng một container agent trong stack, log cho thấy các bước `Shutting down` → `Application shutdown complete` → `Finished server process [1]`.
+
+### Exercise 5.3: Stateless design
+
+Bản production lưu session và conversation history trong Redis (`session:<session_id>`, TTL 3600 giây). Mỗi agent đọc/ghi cùng Redis, nên request tiếp theo vẫn tìm được history dù Nginx chuyển sang instance khác. Nếu lưu trong RAM của từng instance, request đến instance khác sẽ không thấy session cũ. Code mẫu có fallback lưu RAM khi không kết nối Redis; chế độ đó không đảm bảo stateless khi scale.
+
+### Exercise 5.4: Load balancing
+
+Chạy `docker compose -p k5-day14-scaling up -d --build --scale agent=3` trong `05-scaling-reliability/production/` sau khi tạo `.env.local` rỗng. Compose khởi động **3 agent**, **1 Redis** và **1 Nginx**; Nginx nhận request trên cổng **8080** rồi proxy đến `agent:8000` trên mạng nội bộ. Năm request trong cùng một session được xử lý bởi ba instance khác nhau: `instance-9bbfdb`, `instance-5a5b81`, `instance-2f1e44`. Sau khi dừng `agent-2` (`instance-9bbfdb`), request tiếp theo vẫn được `instance-5a5b81` xử lý qua Nginx.
+
+### Exercise 5.5: Test stateless
+
+Chạy `python test_stateless.py` với `PYTHONIOENCODING=utf-8` trên PowerShell. Script gửi **5 câu hỏi** trong cùng session; endpoint history trả **10 message** (5 user + 5 assistant) dù các request đi qua ba instance. Sau khi dừng một instance, gửi thêm một câu hỏi bằng cùng `session_id`; history tăng lên **12 message**, response báo `storage: redis`. Điều này chứng minh session được chia sẻ giữa các instance trong phép thử này. Script `test_stateless.py` chỉ gửi 5 câu và đọc history; bước dừng instance được thực hiện riêng. Đã dọn stack bằng `docker compose -p k5-day14-scaling down`.
